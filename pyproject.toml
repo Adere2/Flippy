@@ -4,4 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "langchain>=1.2.10",
+    "langchain-google-genai>=4.2.1",
+    "langchain-text-splitters>=1.1.1",
+    "python-dotenv>=1.2.1",
+    "python-frontmatter>=1.1.0",
+]
