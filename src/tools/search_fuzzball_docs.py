@@ -40,5 +40,5 @@ def search_fuzzball_docs(query: str) -> str:
 
 
 if __name__ == "__main__":
-    result = search_fuzzball_docs.invoke({"query": "how to define a job"})
+    result = search_fuzzball_docs.invoke({"query": "who created fuzzball"})
     print(result)
