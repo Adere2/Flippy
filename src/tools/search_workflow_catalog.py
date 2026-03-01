@@ -24,8 +24,8 @@ def search_workflow_catalog(query: str) -> str:
             persist_directory=CHROMA_DB_DIR, embedding_function=embeddings
         )
 
-        # Return top 2 results since these are full app packages and take up more tokens
-        results = vector_store.similarity_search(query, k=2)
+        # Return only 1 result, the tool "list_workflow_cataglog" improves accuracy.
+        results = vector_store.similarity_search(query, k=1)
 
         if not results:
             return "No relevant application templates found in the catalog."
@@ -41,3 +41,12 @@ def search_workflow_catalog(query: str) -> str:
 
     except Exception as e:
         return f"Error querying Workflow Catalog vector store: {str(e)}"
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    result = search_workflow_catalog.invoke({"query": "specfem3d app earthquake"})
+    print(result)

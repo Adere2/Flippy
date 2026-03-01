@@ -29,6 +29,7 @@ def search_fuzzfile_examples(query: str) -> str:
 
         seen_filenames = set()
         formatted_results = []
+
         for doc in results:
             # Extract the filename from the metadata to give the LLM context
             source = doc.metadata.get("source", "Unknown File")

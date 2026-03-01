@@ -10,7 +10,7 @@ CHROMA_DB_DIR = str(
 
 
 @tool
-def list_workflow_catalog_apps() -> str:
+def list_workflow_catalog() -> str:
     """
     List all application names available in the Fuzzball Workflow Catalog.
     Use this tool when the user asks what apps, templates, or workflows are available

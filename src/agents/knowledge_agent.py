@@ -13,7 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 # Add src to the path so we can import our modules securely
 sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 from tools.get_fuzzfile_syntax import get_fuzzfile_syntax
-from tools.list_workflow_catalog_apps import list_workflow_catalog_apps
+from tools.list_workflow_catalog import list_workflow_catalog
 from tools.search_fuzzball_docs import search_fuzzball_docs
 from tools.search_simple_fuzzfiles import search_fuzzfile_examples
 from tools.search_workflow_catalog import search_workflow_catalog
@@ -57,7 +57,7 @@ Your job is to answer questions and generate Fuzzfiles using ONLY the provided d
 
 TOOL USAGE RULES:
 1. Use `search_fuzzball_docs` for general knowledge and troubleshooting.
-2. Use `list_workflow_catalog_apps` when the user asks what apps or templates are available in the catalog.
+2. Use `list_workflow_catalog` when the user asks what apps or templates are available in the catalog.
 3. Use `search_workflow_catalog` FIRST if the user wants to run a specific application (like Jupyter, PyTorch, Nextflow, etc.) to see if an official template exists.
 4. Use `search_fuzzfile_examples` for basic syntax examples if no workflow template exists.
 5. ALWAYS use `get_fuzzfile_syntax` before generating or modifying a Fuzzfile to verify you are using the correct schema, keys, and sections.
@@ -73,7 +73,7 @@ knowledge_agent = create_agent(
         search_fuzzball_docs,
         search_fuzzfile_examples,
         search_workflow_catalog,
-        list_workflow_catalog_apps,
+        list_workflow_catalog,
         get_fuzzfile_syntax,
     ],
     system_prompt=system_prompt,
@@ -82,96 +82,7 @@ knowledge_agent = create_agent(
 # Quick Test Block
 if __name__ == "__main__":
     test_question = """
-    can we get this to have a ui i can visit aswell:
-
-        remember services need scripts
-
-
-        jobs:
-          pull-model:
-            name: pull-model
-            image:
-              uri: docker://ollama/ollama:latest
-            mounts:
-              ollama-data:
-                location: /.ollama
-            script: |
-              #!/bin/bash
-              set -e
-              echo "Starting temporary server to pull model..."
-              ollama serve &
-
-              # Wait for local server to respond
-              until ollama list > /dev/null 2>&1; do
-                sleep 2
-              done
-
-              echo "Pulling phi3:mini..."
-              ollama pull phi3:mini
-              echo "Model pull complete."
-            resource:
-              cpu:
-                cores: 2
-              memory:
-                size: 4GiB
-          test-prompt:
-            name: test-prompt
-            image:
-              uri: docker://curlimages/curl:latest
-            script: |
-              #!/bin/sh
-              echo "Sending prompt to Phi-3..."
-              # Using the .svc suffix to match your working example's discovery pattern
-              curl -f -X POST http://inference-server.svc:11434/api/generate \
-                -H "Content-Type: application/json" \
-                -d '{
-                  "model": "phi3:mini",
-                  "prompt": "Explain quantum computing in one sentence for a 5-year old.",
-                  "stream": false
-                }'
-            resource:
-              cpu:
-                cores: 1
-              memory:
-                size: 512MiB
-            depends-on:
-              - name: inference-server
-                status: RUNNING
-        version: v1
-        volumes:
-          ollama-data:
-            name: ollama-data
-            reference: volume://user/persistent/ollama-models
-        services:
-          inference-server:
-            env:
-              - OLLAMA_HOST=0.0.0.0:11434
-            name: inference-server
-            image:
-              uri: docker://ollama/ollama:latest
-            mounts:
-              ollama-data:
-                location: /.ollama
-            script: |
-              #!/bin/bash
-              echo "Starting Ollama Inference Server..."
-              exec ollama serve
-            network:
-              ports:
-                - name: ollama-api
-                  port: 11434
-                  protocol: tcp
-            persist: true
-            resource:
-              cpu:
-                cores: 4
-              memory:
-                size: 8GIB
-              devices:
-                nvidia.com/gpu: 1
-            depends-on:
-              - name: pull-model
-                status: FINISHED
+    what in the workflow catalgo?
     """
     print(f"👤 User: {test_question}\n")
 
