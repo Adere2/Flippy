@@ -138,6 +138,9 @@ knowledge_agent = create_agent(
     system_prompt=system_prompt,
 )
 
+# Alias for import compatibility
+agent_executor = knowledge_agent
+
 # Quick Test Block
 if __name__ == "__main__":
     print("🤖 Fuzzball Assistant: Ready! (Type 'exit' to quit)")

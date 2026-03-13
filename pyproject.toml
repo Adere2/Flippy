@@ -15,6 +15,7 @@ dependencies = [
     "langchain-text-splitters>=1.1.1",
     "python-dotenv>=1.2.1",
     "python-frontmatter>=1.1.0",
+    "streamlit>=1.55.0",
 ]
 
 [tool.uv.sources]
