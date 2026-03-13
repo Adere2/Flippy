@@ -5,7 +5,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+from src.config import get_embeddings
 
 load_dotenv()
 
@@ -18,7 +19,10 @@ if not FUZZFILE_DIR:
     )
     sys.exit(1)
 
-CHROMA_DB_DIR = str(Path(__file__).resolve().parents[1] / "data/chroma_db/fuzzfiles")
+_embed_provider = os.getenv("EMBED_PROVIDER", "google")
+CHROMA_DB_DIR = str(
+    Path(__file__).resolve().parents[2] / "data" / "chroma_db" / f"fuzzfiles-{_embed_provider}"
+)
 
 
 def index_fuzzfiles():
@@ -35,8 +39,8 @@ def index_fuzzfiles():
     documents = loader.load()
     print(f"✅ Loaded {len(documents)} Fuzzfiles.")
 
-    # Using the standard Google embedding model
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+    # Using the configured embedding model
+    embeddings = get_embeddings()
 
     print(f"🧠 Generating embeddings and saving to: {CHROMA_DB_DIR}...")
     vector_store = Chroma.from_documents(

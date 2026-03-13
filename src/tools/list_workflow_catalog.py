@@ -1,11 +1,14 @@
+import os
 from pathlib import Path
 
 from langchain_chroma import Chroma
 from langchain_core.tools import tool
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+from src.config import get_embeddings
+
+_embed_provider = os.getenv("EMBED_PROVIDER", "google")
 CHROMA_DB_DIR = str(
-    Path(__file__).resolve().parents[2] / "data/chroma_db/workflow_catalog"
+    Path(__file__).resolve().parents[2] / "data" / "chroma_db" / f"workflow_catalog-{_embed_provider}"
 )
 
 
@@ -17,7 +20,7 @@ def list_workflow_catalog() -> str:
     in the catalog, or when you want to check whether a specific app might exist before
     doing a full search.
     """
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+    embeddings = get_embeddings()
 
     try:
         vector_store = Chroma(

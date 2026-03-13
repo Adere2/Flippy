@@ -1,12 +1,15 @@
+import os
 from pathlib import Path
 
 from langchain_chroma import Chroma
 from langchain_core.tools import tool
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+from src.config import get_embeddings
+
+_embed_provider = os.getenv("EMBED_PROVIDER", "google")
 # Matching your path structure: parents[1] -> src -> parents[2] -> project root
 CHROMA_DB_DIR = str(
-    Path(__file__).resolve().parents[2] / "data/chroma_db/workflow_catalog"
+    Path(__file__).resolve().parents[2] / "data" / "chroma_db" / f"workflow_catalog-{_embed_provider}"
 )
 
 
@@ -17,7 +20,7 @@ def search_workflow_catalog(query: str) -> str:
     Use this tool BEFORE trying to write a complex Fuzzfile from scratch to see if
     an official template already exists for the requested application (e.g., Jupyter, PyTorch).
     """
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+    embeddings = get_embeddings()
 
     try:
         vector_store = Chroma(

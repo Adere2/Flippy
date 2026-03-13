@@ -1,10 +1,15 @@
+import os
 from pathlib import Path
 
 from langchain_chroma import Chroma
 from langchain_core.tools import tool
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-CHROMA_DB_DIR = str(Path(__file__).resolve().parents[2] / "data/chroma_db/fuzzfiles")
+from src.config import get_embeddings
+
+_embed_provider = os.getenv("EMBED_PROVIDER", "google")
+CHROMA_DB_DIR = str(
+    Path(__file__).resolve().parents[2] / "data" / "chroma_db" / f"fuzzfiles-{_embed_provider}"
+)
 
 
 @tool
@@ -14,7 +19,7 @@ def search_fuzzfile_examples(query: str) -> str:
     Use this tool when you need to see how to write a Fuzzfile for a specific job
     type (e.g., MPI, GPU, simple dependency).
     """
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+    embeddings = get_embeddings()
 
     try:
         vector_store = Chroma(

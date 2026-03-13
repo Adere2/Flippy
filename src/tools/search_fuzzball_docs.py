@@ -1,17 +1,20 @@
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.tools import tool
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+from src.config import get_embeddings
 
 load_dotenv()
 
 # 1. Initialize the database connection
 project_root = Path(__file__).resolve().parents[2]
-db_path = project_root / "data" / "chroma_db" / "hugodocs"
+_embed_provider = os.getenv("EMBED_PROVIDER", "google")
+db_path = project_root / "data" / "chroma_db" / f"hugodocs-{_embed_provider}"
 
-embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+embeddings = get_embeddings()
 vectorstore = Chroma(persist_directory=str(db_path), embedding_function=embeddings)
 
 # Create a retriever that pulls the top 5 chunks

@@ -1,8 +1,10 @@
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+from src.config import get_embeddings
 
 # Load your Google API key
 load_dotenv()
@@ -15,12 +17,13 @@ def test_retrieval(query: str):
     # __file__ is src/indexing/test_retrieval.py
     # .parents[2] goes up to the project root (fuzzball-assistant/)
     project_root = Path(__file__).resolve().parents[2]
-    db_path = project_root / "data" / "chroma_db" / "workflow_catalog"
+    embed_provider = os.getenv("EMBED_PROVIDER", "google")
+    db_path = project_root / "data" / "chroma_db" / f"workflow_catalog-{embed_provider}"
 
     print(f"📂 Looking for database at: {db_path}")
 
     # 1. Initialize the EXACT same embedding model used for indexing
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+    embeddings = get_embeddings()
 
     # 2. Connect to the local vector database
     vectorstore = Chroma(persist_directory=str(db_path), embedding_function=embeddings)

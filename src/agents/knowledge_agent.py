@@ -13,7 +13,8 @@ load_dotenv()
 
 from langchain.agents import create_agent
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_google_genai import ChatGoogleGenerativeAI
+
+from src.config import get_llm
 
 from src.tools.fuzzball_account_tools import (
     get_account,
@@ -70,7 +71,7 @@ class VerboseCallbackHandler(BaseCallbackHandler):
 
 
 # 1. Initialize the LLM
-llm = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", temperature=0.2)
+llm = get_llm()
 
 # 2. Define the Agent's Persona and Rules
 system_prompt = """You are a senior Fuzzball engineer and expert support assistant.

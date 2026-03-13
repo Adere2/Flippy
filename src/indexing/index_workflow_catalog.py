@@ -11,7 +11,8 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+from src.config import get_embeddings
 
 from src.parsing.workflow_parser import parse_workflow_app
 
@@ -53,9 +54,10 @@ def index_workflow_catalog(catalog_dir: str, persist_dir: str):
         print("No documents to index. Exiting.")
         return
 
-    # Using the exact same embedding model you used for the Hugo docs
-    print("Initializing Google Embedding Model...")
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+    # Using the exact same embedding model used for indexing other collections
+    embed_provider = os.getenv("EMBED_PROVIDER", "google")
+    print(f"Initializing {embed_provider} embedding model...")
+    embeddings = get_embeddings()
 
     print(f"Saving embeddings to Chroma database at {persist_dir}...")
     vectorstore = Chroma.from_documents(
@@ -78,6 +80,7 @@ if __name__ == "__main__":
     # We will store the database right inside our project folder
     # Calculating relative to this file: src/indexing/index_workflow_catalog.py -> src/indexing -> src -> project root
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
-    DATABASE_PATH = str(PROJECT_ROOT / "data" / "chroma_db" / "workflow_catalog")
+    embed_provider = os.getenv("EMBED_PROVIDER", "google")
+    DATABASE_PATH = str(PROJECT_ROOT / "data" / "chroma_db" / f"workflow_catalog-{embed_provider}")
 
     index_workflow_catalog(CATALOG_PATH, DATABASE_PATH)

@@ -7,8 +7,9 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from src.config import get_embeddings
 
 from src.parsing.hugo_parser import parse_hugo_file
 
@@ -50,10 +51,10 @@ def index_fuzzball_docs(docs_dir: str, persist_dir: str):
     chunks = text_splitter.split_documents(documents)
     print(f"Created {len(chunks)} chunks.")
 
-    # 3. Initialize the Google Embedding Model
-    # This turns our text chunks into arrays of numbers (vectors)
-    print("Initializing Google Embedding Model...")
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+    # 3. Initialize the Embedding Model
+    embed_provider = os.getenv("EMBED_PROVIDER", "google")
+    print(f"Initializing {embed_provider} embedding model...")
+    embeddings = get_embeddings()
 
     # 4. Create and Persist the Vector Database
     print(f"Saving embeddings to Chroma database at {persist_dir}...")
@@ -77,6 +78,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # We will store the database right inside our project folder
-    DATABASE_PATH = "./data/chroma_db/hugodocs"
+    embed_provider = os.getenv("EMBED_PROVIDER", "google")
+    DATABASE_PATH = f"./data/chroma_db/hugodocs-{embed_provider}"
 
     index_fuzzball_docs(SOURCE_DOCS_PATH, DATABASE_PATH)
