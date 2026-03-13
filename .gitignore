@@ -14,3 +14,7 @@ wheels/
 
 # Chroma vector store databases
 data/
+
+# my random
+sdkdocstemp/
+.DS_Store
