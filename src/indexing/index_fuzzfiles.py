@@ -5,6 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import get_embeddings
 
@@ -39,12 +40,21 @@ def index_fuzzfiles():
     documents = loader.load()
     print(f"✅ Loaded {len(documents)} Fuzzfiles.")
 
+    # Split documents to stay within the embedding model's context window
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1500,
+        chunk_overlap=200,
+        length_function=len,
+    )
+    chunks = text_splitter.split_documents(documents)
+    print(f"📄 Split into {len(chunks)} chunks.")
+
     # Using the configured embedding model
     embeddings = get_embeddings()
 
     print(f"🧠 Generating embeddings and saving to: {CHROMA_DB_DIR}...")
     vector_store = Chroma.from_documents(
-        documents=documents, embedding=embeddings, persist_directory=CHROMA_DB_DIR
+        documents=chunks, embedding=embeddings, persist_directory=CHROMA_DB_DIR
     )
     print("✅ Indexing complete!")
 

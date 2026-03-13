@@ -11,6 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import get_embeddings
 
@@ -22,7 +23,7 @@ load_dotenv()
 def index_workflow_catalog(catalog_dir: str, persist_dir: str):
     """
     Crawls the Workflow Catalog, parses each app directory into a single Document,
-    and saves them to a Vector DB. No chunking is used so apps stay intact.
+    chunks it, and saves the chunks to a Vector DB.
     """
     print(f"🔍 Crawling Workflow Catalog in: {catalog_dir}")
     catalog_path = Path(catalog_dir)
@@ -54,6 +55,15 @@ def index_workflow_catalog(catalog_dir: str, persist_dir: str):
         print("No documents to index. Exiting.")
         return
 
+    # Split documents to stay within the embedding model's context window
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1500,
+        chunk_overlap=200,
+        length_function=len,
+    )
+    chunks = text_splitter.split_documents(documents)
+    print(f"📄 Split into {len(chunks)} chunks.")
+
     # Using the exact same embedding model used for indexing other collections
     embed_provider = os.getenv("EMBED_PROVIDER", "google")
     print(f"Initializing {embed_provider} embedding model...")
@@ -61,7 +71,7 @@ def index_workflow_catalog(catalog_dir: str, persist_dir: str):
 
     print(f"Saving embeddings to Chroma database at {persist_dir}...")
     vectorstore = Chroma.from_documents(
-        documents=documents, embedding=embeddings, persist_directory=persist_dir
+        documents=chunks, embedding=embeddings, persist_directory=persist_dir
     )
 
     print("✅ Indexing complete! The Workflow Catalog is ready.")

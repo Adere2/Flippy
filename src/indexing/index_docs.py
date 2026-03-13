@@ -42,7 +42,7 @@ def index_fuzzball_docs(docs_dir: str, persist_dir: str):
     # We chunk it into 1000-character blocks, with a 200-character overlap
     # so we don't accidentally cut a sentence or thought in half.
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
+        chunk_size=1500,
         chunk_overlap=200,
         length_function=len,
     )
