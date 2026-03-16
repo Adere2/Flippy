@@ -11,10 +11,8 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import get_embeddings
-
 from src.parsing.workflow_parser import parse_workflow_app
 
 load_dotenv()
@@ -55,15 +53,6 @@ def index_workflow_catalog(catalog_dir: str, persist_dir: str):
         print("No documents to index. Exiting.")
         return
 
-    # Split documents to stay within the embedding model's context window
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,
-        chunk_overlap=200,
-        length_function=len,
-    )
-    chunks = text_splitter.split_documents(documents)
-    print(f"📄 Split into {len(chunks)} chunks.")
-
     # Using the exact same embedding model used for indexing other collections
     embed_provider = os.getenv("EMBED_PROVIDER", "google")
     print(f"Initializing {embed_provider} embedding model...")
@@ -71,7 +60,7 @@ def index_workflow_catalog(catalog_dir: str, persist_dir: str):
 
     print(f"Saving embeddings to Chroma database at {persist_dir}...")
     vectorstore = Chroma.from_documents(
-        documents=chunks, embedding=embeddings, persist_directory=persist_dir
+        documents=documents, embedding=embeddings, persist_directory=persist_dir
     )
 
     print("✅ Indexing complete! The Workflow Catalog is ready.")
@@ -91,6 +80,8 @@ if __name__ == "__main__":
     # Calculating relative to this file: src/indexing/index_workflow_catalog.py -> src/indexing -> src -> project root
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
     embed_provider = os.getenv("EMBED_PROVIDER", "google")
-    DATABASE_PATH = str(PROJECT_ROOT / "data" / "chroma_db" / f"workflow_catalog-{embed_provider}")
+    DATABASE_PATH = str(
+        PROJECT_ROOT / "data" / "chroma_db" / f"workflow_catalog-{embed_provider}"
+    )
 
     index_workflow_catalog(CATALOG_PATH, DATABASE_PATH)

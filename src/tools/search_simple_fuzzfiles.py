@@ -1,15 +1,25 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.tools import tool
 
 from src.config import get_embeddings
 
+load_dotenv()
+
 _embed_provider = os.getenv("EMBED_PROVIDER", "google")
 CHROMA_DB_DIR = str(
-    Path(__file__).resolve().parents[2] / "data" / "chroma_db" / f"fuzzfiles-{_embed_provider}"
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "chroma_db"
+    / f"fuzzfiles-{_embed_provider}"
 )
+
+# Initialize embeddings and vector store once at module level
+embeddings = get_embeddings()
+vector_store = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
 
 
 @tool
@@ -19,13 +29,7 @@ def search_fuzzfile_examples(query: str) -> str:
     Use this tool when you need to see how to write a Fuzzfile for a specific job
     type (e.g., MPI, GPU, simple dependency).
     """
-    embeddings = get_embeddings()
-
     try:
-        vector_store = Chroma(
-            persist_directory=CHROMA_DB_DIR, embedding_function=embeddings
-        )
-
         # Fetch more than we need so we still get 3 unique files after deduplication
         results = vector_store.similarity_search(query, k=6)
 
@@ -60,9 +64,5 @@ def search_fuzzfile_examples(query: str) -> str:
 
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    load_dotenv()
-
     result = search_fuzzfile_examples.invoke({"query": "GPU job example"})
     print(result)
