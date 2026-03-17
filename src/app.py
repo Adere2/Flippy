@@ -1,104 +1,171 @@
 import json
-import threading
+
 import streamlit as st
-from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
+
 from agents.knowledge_agent import agent_executor
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.callbacks import BaseCallbackHandler
-
-
-class StreamlitToolCallbackHandler(BaseCallbackHandler):
-    """Renders live tool-call status widgets inside the active Streamlit context.
-
-    Keyed by run_id so concurrent tool calls don't clobber each other.
-    """
-
-    def __init__(self):
-        # Capture the session context NOW (main thread) so worker threads can
-        # re-attach it before touching any Streamlit state.
-        self._ctx = get_script_run_ctx()
-        # Dict[run_id -> {"status": ..., "name": ...}] to support parallel calls.
-        self._runs: dict = {}
-
-    def _attach_ctx(self):
-        if self._ctx:
-            add_script_run_ctx(threading.current_thread(), self._ctx)
-
-    @staticmethod
-    def _format_input(input_str) -> str:
-        """Return a pretty-printed JSON string regardless of input type."""
-        if isinstance(input_str, dict):
-            return json.dumps(input_str, indent=2)
-        try:
-            return json.dumps(json.loads(input_str), indent=2)
-        except Exception:
-            return str(input_str)
-
-    def on_tool_start(self, serialized, input_str, run_id=None, **kwargs):
-        self._attach_ctx()
-        name = serialized.get("name", "unknown_tool")
-        status = st.status(f"🔧 `{name}`", expanded=True, state="running")
-        status.code(self._format_input(input_str), language="json")
-        self._runs[run_id] = {"status": status, "name": name}
-
-    def on_tool_end(self, output, run_id=None, **kwargs):
-        self._attach_ctx()
-        run = self._runs.pop(run_id, None)
-        if not run:
-            return
-        clean = str(output)
-        if len(clean) > 1200:
-            clean = clean[:1200] + "\n… [output truncated]"
-        run["status"].code(clean)
-        run["status"].update(label=f"✅ `{run['name']}`", state="complete", expanded=False)
-
-    def on_tool_error(self, error, run_id=None, **kwargs):
-        self._attach_ctx()
-        run = self._runs.pop(run_id, None)
-        if not run:
-            return
-        run["status"].error(str(error))
-        run["status"].update(label=f"❌ `{run['name']}` failed", state="error", expanded=True)
-
 
 st.set_page_config(page_title="Flippy Assistant", page_icon="🤖")
 st.title("🤖 Flippy: Fuzzball HPC Assistant")
 
-# Initialize chat history in Streamlit's session state
+# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display previous chat messages
+# Display chat history on every rerun
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# React to user input
+# Accept user input
 if prompt := st.chat_input("Ask me about Fuzzball or to run a command..."):
-    st.chat_message("user").markdown(prompt)
+    with st.chat_message("user"):
+        st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
+    lc_messages = []
+    for msg in st.session_state.messages:
+        if msg["role"] == "user":
+            lc_messages.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            # Note: We aren't reconstructing ToolMessages/AIMessages perfectly here
+            # for history, but typically strict history reconstruction requires
+            # saving tool outputs in session state as separate entries.
+            # For this simple UI, we treat history as text-only for now.
+            lc_messages.append(HumanMessage(content=msg["content"]))
+
     with st.chat_message("assistant"):
+        # We use a list to track all response parts so we can save full history later
+        full_response_content = ""
+
+        # Placeholder management for interleaving text and tools
+        current_text_placeholder = st.empty()
+        current_text_block = ""
+
+        # Track active tool UI elements
+        # Map: tool_call_id -> {
+        #   "status": st.status object,
+        #   "args_placeholder": st.empty object,
+        #   "args_buffer": str,
+        #   "name": str
+        # }
+        active_tools = {}
+
         try:
-            lc_messages = []
-            for msg in st.session_state.messages:
-                if msg["role"] == "user":
-                    lc_messages.append(HumanMessage(content=msg["content"]))
-                else:
-                    lc_messages.append(AIMessage(content=msg["content"]))
+            for msg, _ in agent_executor.stream(
+                {"messages": lc_messages}, stream_mode="messages"
+            ):
+                # 1. Handle Tool Calls (Accumulate args and show status)
+                if isinstance(msg, AIMessageChunk) and msg.tool_call_chunks:
+                    # If we were writing text, finish that block so the tool appears below it
+                    if current_text_block:
+                        current_text_placeholder = None
+                        current_text_block = ""
 
-            handler = StreamlitToolCallbackHandler()
-            response = agent_executor.invoke(
-                {"messages": lc_messages},
-                config={"callbacks": [handler]},
+                    for chunk in msg.tool_call_chunks:
+                        # Some models allow parallel tool calls, so we rely on index/id
+                        # If 'id' is present, it's the start of a new call definition
+                        # or a continuation where the ID is repeated.
+                        # LangChain guarantees 'index' is stable.
+                        tc_id = chunk.get("id")
+
+                        # Note: In streaming chunks, 'id' might only appear in the first chunk
+                        # But typically LangChain aggregators handle this. In raw stream,
+                        # we might need to rely on 'index' if 'id' is missing, but
+                        # usually for UI 'id' is best if available.
+                        # If 'id' is missing but we have an active tool at this index, we'd continue.
+                        # For simplicity, we assume 'id' is provided or we match by index if needed.
+                        # Here we will rely on 'id' presence or map index to ID if we implemented
+                        # a more complex aggregator.
+                        # HOWEVER: Most providers send ID in first chunk.
+
+                        if tc_id and tc_id not in active_tools:
+                            # Start a new Status container
+                            name = chunk.get("name") or "unknown_tool"
+                            status_container = st.status(
+                                f"🔧 `{name}`", expanded=True, state="running"
+                            )
+                            with status_container:
+                                st.write("**Input:**")
+                                args_ph = st.empty()
+
+                            active_tools[tc_id] = {
+                                "status": status_container,
+                                "args_placeholder": args_ph,
+                                "args_buffer": "",
+                                "name": name,
+                            }
+
+                        # If we have args, append them
+                        # We need to find which tool this chunk belongs to.
+                        # If chunk has ID, use it. If not, it's a continuation of the last one?
+                        # Standard LC generic stream: Usually ID is on first chunk.
+                        # We'll use the ID if present.
+                        if tc_id and chunk["args"]:
+                            tool_data = active_tools[tc_id]
+                            tool_data["args_buffer"] += chunk["args"]
+
+                            # Live update args
+                            raw = tool_data["args_buffer"]
+                            try:
+                                pretty = json.dumps(json.loads(raw), indent=2)
+                                tool_data["args_placeholder"].code(
+                                    pretty, language="json"
+                                )
+                            except:
+                                tool_data["args_placeholder"].code(raw, language="json")
+
+                # 2. Handle Tool Execution Results (Update status to complete)
+                elif isinstance(msg, ToolMessage):
+                    tc_id = msg.tool_call_id
+                    if tc_id in active_tools:
+                        tool_data = active_tools[tc_id]
+                        status = tool_data["status"]
+
+                        # Render output inside the status container
+                        status.write("**Output:**")
+                        status.code(msg.content)
+                        status.update(
+                            label=f"`{tool_data['name']}`",
+                            state="complete",
+                            expanded=False,
+                        )
+
+                        # Ensure next text block starts fresh below this tool
+                        current_text_placeholder = None
+                        current_text_block = ""
+
+                # 3. Stream AI Text Response
+                elif isinstance(msg, AIMessageChunk) and msg.content:
+                    # If we don't have a place to write text (e.g. just finished a tool), create one
+                    if current_text_placeholder is None:
+                        current_text_placeholder = st.empty()
+
+                    content_chunk = msg.content
+
+                    # Handle potential list content (Gemini/Anthropic)
+                    text_to_add = ""
+                    if isinstance(content_chunk, list):
+                        for part in content_chunk:
+                            if isinstance(part, str):
+                                text_to_add += part
+                            elif isinstance(part, dict) and "text" in part:
+                                text_to_add += part["text"]
+                    else:
+                        text_to_add = str(content_chunk)
+
+                    full_response_content += text_to_add
+                    current_text_block += text_to_add
+                    current_text_placeholder.markdown(current_text_block + "▌")
+
+            # Final cleanup: remove cursor from last text block
+            if current_text_placeholder:
+                current_text_placeholder.markdown(current_text_block)
+
+            # Save to history
+            st.session_state.messages.append(
+                {"role": "assistant", "content": full_response_content}
             )
-            raw_content = response["messages"][-1].content
-            if isinstance(raw_content, list) and raw_content and "text" in raw_content[0]:
-                output_text = raw_content[0]["text"]
-            else:
-                output_text = str(raw_content)
 
-            st.markdown(output_text)
-            st.session_state.messages.append({"role": "assistant", "content": output_text})
         except Exception as e:
-            st.error(f"Error running agent: {e}")
+            st.error(f"An error occurred: {e}")

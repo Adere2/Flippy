@@ -12,10 +12,8 @@ load_dotenv()
 #     sys.path.append(str(project_root))
 
 from langchain.agents import create_agent
-from langchain_core.callbacks import BaseCallbackHandler
 
 from src.config import get_llm
-
 from src.tools.fuzzball_account_tools import (
     get_account,
     list_account_members,
@@ -39,36 +37,6 @@ from src.tools.list_workflow_catalog import list_workflow_catalog
 from src.tools.search_fuzzball_docs import search_fuzzball_docs
 from src.tools.search_simple_fuzzfiles import search_fuzzfile_examples
 from src.tools.search_workflow_catalog import search_workflow_catalog
-
-
-# --- NEW: Custom Callback Handler for Verbose Logging ---
-class VerboseCallbackHandler(BaseCallbackHandler):
-    def on_tool_start(self, serialized, input_str, **kwargs):
-        print(f"\n⚙️  STAGE: Tool Selection")
-        print(f"   🔧 Tool Called: {serialized.get('name', 'Unknown Tool')}")
-
-        # Try to format the JSON input nicely for the console
-        try:
-            clean_input = json.dumps(json.loads(input_str), indent=2)
-        except:
-            clean_input = input_str
-
-        print(f"   📥 Arguments Passed:\n{clean_input}")
-        print("\n⏳ Executing tool...")
-
-    def on_tool_end(self, output, **kwargs):
-        print(f"\n⚙️  STAGE: Tool Execution Complete")
-
-        # Truncate the output string if it's massively long to keep the console readable
-        clean_output = str(output)
-        if len(clean_output) > 1500:
-            clean_output = (
-                clean_output[:1500] + "\n   ... [OUTPUT TRUNCATED FOR READABILITY] ..."
-            )
-
-        print(f"   📤 Tool Returned:\n{clean_output}")
-        print("\n⏳ Agent is analyzing the results...")
-
 
 # 1. Initialize the LLM
 llm = get_llm()
@@ -144,10 +112,10 @@ agent_executor = knowledge_agent
 # Quick Test Block
 if __name__ == "__main__":
     print("🤖 Fuzzball Assistant: Ready! (Type 'exit' to quit)")
-    
+
     # We maintain a simple message history for this session manually
     chat_history = []
-    
+
     while True:
         try:
             user_input = input("\n👤 User: ").strip()
@@ -157,36 +125,51 @@ if __name__ == "__main__":
             if not user_input:
                 continue
 
-            # Instantiate our custom logging handler
-            verbose_handler = VerboseCallbackHandler()
-            
             # Simple context management: Append user message
             # langchain expects messages in [("role", "content")] format for .invoke
             # But we need to maintain the full history for context
             chat_history.append(("user", user_input))
 
-            result = knowledge_agent.invoke(
-                {"messages": chat_history}, 
-                config={"callbacks": [verbose_handler]}
-            )
-            
-            # Extract AI response
-            ai_message = result["messages"][-1]
-            chat_history.append(ai_message) # Add AI response to history
+            print("\n⏳ Processing...")
 
-            # Clean up the raw Gemini dictionary output structure for display
-            raw_content = ai_message.content
-            if (
-                isinstance(raw_content, list)
-                and len(raw_content) > 0
-                and "text" in raw_content[0]
-            ):
-                final_answer = raw_content[0]["text"]
-            else:
-                final_answer = str(raw_content)
+            final_message = None
+            for event in knowledge_agent.stream({"messages": chat_history}):
+                for key, value in event.items():
+                    if "messages" in value:
+                        for msg in value["messages"]:
+                            # Show tool calls
+                            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                                for tc in msg.tool_calls:
+                                    print(f"\n⚙️  Calling: {tc.get('name')}")
+                                    print(
+                                        f"   Args: {json.dumps(tc.get('args'), indent=2)}"
+                                    )
 
-            print(f"\n🤖 Fuzzball Assistant:\n{final_answer}")
-            
+                            # Show tool output
+                            if hasattr(msg, "type") and msg.type == "tool":
+                                output = str(msg.content)
+                                if len(output) > 500:
+                                    output = output[:500] + "..."
+                                print(f"\n✅ Tool Output ({msg.name}):\n   {output}")
+
+                            final_message = msg
+
+            if final_message:
+                chat_history.append(final_message)  # Add AI response to history
+
+                # Clean up the raw Gemini dictionary output structure for display
+                raw_content = final_message.content
+                if (
+                    isinstance(raw_content, list)
+                    and len(raw_content) > 0
+                    and "text" in raw_content[0]
+                ):
+                    final_answer = raw_content[0]["text"]
+                else:
+                    final_answer = str(raw_content)
+
+                print(f"\n🤖 Fuzzball Assistant:\n{final_answer}")
+
         except KeyboardInterrupt:
             print("\n👋 Exiting.")
             break
