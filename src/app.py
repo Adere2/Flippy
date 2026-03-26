@@ -1,25 +1,9 @@
 import json
-import uuid
 
 import streamlit as st
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 
 from agents.knowledge_agent import agent_executor
-
-
-def format_tool_output(content, max_chars: int = 1200) -> str:
-    if isinstance(content, (dict, list)):
-        try:
-            text = json.dumps(content, indent=2)
-        except TypeError:
-            text = str(content)
-    else:
-        text = str(content)
-
-    if len(text) <= max_chars:
-        return text
-    return text[:max_chars] + "\n\n[... truncated ...]"
-
 
 st.set_page_config(page_title="Flippy Assistant", page_icon="🤖")
 st.title("🤖 Flippy: Fuzzball HPC Assistant")
@@ -27,9 +11,6 @@ st.title("🤖 Flippy: Fuzzball HPC Assistant")
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
-if "thread_id" not in st.session_state:
-    st.session_state.thread_id = f"streamlit-{uuid.uuid4()}"
 
 # Display chat history on every rerun
 for msg in st.session_state.messages:
@@ -42,14 +23,20 @@ if prompt := st.chat_input("Ask me about Fuzzball or to run a command..."):
         st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # LangGraph's checkpointer maintains the full conversation state, so we only
-    # need to pass the newest user message to the graph input.
-    latest_message = HumanMessage(content=prompt)
+    lc_messages = []
+    for msg in st.session_state.messages:
+        if msg["role"] == "user":
+            lc_messages.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            # Note: We aren't reconstructing ToolMessages/AIMessages perfectly here
+            # for history, but typically strict history reconstruction requires
+            # saving tool outputs in session state as separate entries.
+            # For this simple UI, we treat history as text-only for now.
+            lc_messages.append(HumanMessage(content=msg["content"]))
 
     with st.chat_message("assistant"):
         # We use a list to track all response parts so we can save full history later
         full_response_content = ""
-        run_config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
         # Placeholder management for interleaving text and tools
         current_text_placeholder = st.empty()
@@ -66,9 +53,7 @@ if prompt := st.chat_input("Ask me about Fuzzball or to run a command..."):
 
         try:
             for msg, _ in agent_executor.stream(
-                {"messages": [latest_message]},
-                config=run_config,
-                stream_mode="messages",
+                {"messages": lc_messages}, stream_mode="messages"
             ):
                 # 1. Handle Tool Calls (Accumulate args and show status)
                 if isinstance(msg, AIMessageChunk) and msg.tool_call_chunks:
@@ -139,7 +124,7 @@ if prompt := st.chat_input("Ask me about Fuzzball or to run a command..."):
 
                         # Render output inside the status container
                         status.write("**Output:**")
-                        status.code(format_tool_output(msg.content))
+                        status.code(msg.content)
                         status.update(
                             label=f"`{tool_data['name']}`",
                             state="complete",
