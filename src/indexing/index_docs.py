@@ -38,21 +38,17 @@ def index_fuzzball_docs(docs_dir: str, persist_dir: str):
     print(f"Successfully parsed {len(documents)} markdown files.")
 
     # 2. Chunk the Documents
-    # We don't want to feed a massive page to the LLM all at once.
-    # We chunk it into 1000-character blocks, with a 200-character overlap
-    # so we don't accidentally cut a sentence or thought in half.
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,
-        chunk_overlap=200,
-        length_function=len,
-    )
+    embed_provider = os.getenv("EMBED_PROVIDER", "google").lower()
+    if embed_provider == "ollama":
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, length_function=len)
+    else:
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200, length_function=len)
 
     print("Chunking documents...")
     chunks = text_splitter.split_documents(documents)
     print(f"Created {len(chunks)} chunks.")
 
     # 3. Initialize the Embedding Model
-    embed_provider = os.getenv("EMBED_PROVIDER", "google")
     print(f"Initializing {embed_provider} embedding model...")
     embeddings = get_embeddings()
 

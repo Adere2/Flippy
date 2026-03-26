@@ -40,12 +40,11 @@ def index_fuzzfiles():
     documents = loader.load()
     print(f"✅ Loaded {len(documents)} Fuzzfiles.")
 
-    # Split documents to stay within the embedding model's context window
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,
-        chunk_overlap=200,
-        length_function=len,
-    )
+    embed_provider = os.getenv("EMBED_PROVIDER", "google").lower()
+    if embed_provider == "ollama":
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, length_function=len)
+    else:
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200, length_function=len)
     chunks = text_splitter.split_documents(documents)
     print(f"📄 Split into {len(chunks)} chunks.")
 

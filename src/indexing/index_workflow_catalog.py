@@ -11,6 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config import get_embeddings
 from src.parsing.workflow_parser import parse_workflow_app
@@ -53,10 +54,14 @@ def index_workflow_catalog(catalog_dir: str, persist_dir: str):
         print("No documents to index. Exiting.")
         return
 
-    # Using the exact same embedding model used for indexing other collections
-    embed_provider = os.getenv("EMBED_PROVIDER", "google")
+    embed_provider = os.getenv("EMBED_PROVIDER", "google").lower()
     print(f"Initializing {embed_provider} embedding model...")
     embeddings = get_embeddings()
+
+    if embed_provider == "ollama":
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, length_function=len)
+        documents = text_splitter.split_documents(documents)
+        print(f"📄 Split into {len(documents)} chunks.")
 
     print(f"Saving embeddings to Chroma database at {persist_dir}...")
     vectorstore = Chroma.from_documents(
